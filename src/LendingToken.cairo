@@ -9,7 +9,7 @@ pub trait ILendingToken<TContractState> {
 #[starknet::contract]
 pub mod LendingToken {
     use OwnableComponent::InternalTrait;
-use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
+    use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use openzeppelin::access::ownable::OwnableComponent;
     use starknet::{ContractAddress};
 
@@ -45,7 +45,7 @@ use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     impl LendingTokenImpl of super::ILendingToken<ContractState> {
         // Custom functions
         fn mint(ref self: ContractState, to: ContractAddress, amount: u256) {
-            self.ownable.assert_only_owner(); 
+            self.ownable.assert_only_owner();
             self.erc20.mint(to, amount);
         }
 

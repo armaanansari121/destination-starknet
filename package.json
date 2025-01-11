@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "deploy": "ts-node scripts/deploy.ts"
+    "deploy-lendingtoken": "ts-node scripts/deployLendingToken.ts",
+    "deploy-destinationcontract": "ts-node scripts/deployDestinationContract.ts"
   },
   "keywords": [],
   "author": "",

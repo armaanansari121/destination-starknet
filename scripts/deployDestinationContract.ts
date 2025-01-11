@@ -21,7 +21,7 @@ async function main() {
 
   try {
     ({ sierraCode, casmCode } = await getCompiledCode(
-      "destination_starknet_DestinatonContract"
+      "destination_starknet_DestinationContract"
     ));
   } catch (error: any) {
     console.log("Failed to read contract files");
@@ -31,8 +31,7 @@ async function main() {
   const myCallData = new CallData(sierraCode.abi);
   const constructor = myCallData.compile("constructor", {
     owner: process.env.DEPLOYER_ADDRESS ?? "",
-    lending_token:
-      "0x19def4db9ed0a934d4450bbc80f786d0484af7926e423fc29cd1acd28ed06f4",
+    lending_token: process.env.LENDING_TOKEN_ADDRESS ?? "",
   });
   const deployResponse = await account0.declareAndDeploy({
     contract: sierraCode,

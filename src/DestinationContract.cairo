@@ -17,12 +17,14 @@ pub trait IDestinationContract<TContractState> {
     fn repay_loan(ref self: TContractState, amount: u256);
     fn liquidate_loan(ref self: TContractState, borrower: ContractAddress);
     fn calculate_total_due(self: @TContractState, borrower: ContractAddress) -> u256;
-    fn get_loan_details(self: @TContractState, borrower: ContractAddress) -> (u256, u256, u256, u256, u256, bool, bool);
+    fn get_loan_details(
+        self: @TContractState, borrower: ContractAddress,
+    ) -> (u256, u256, u256, u256, u256, bool, bool);
     fn withdraw_tokens(ref self: TContractState, amount: u256);
 }
 
 #[starknet::contract]
-pub mod DestinatonContract {
+pub mod DestinationContract {
     use starknet::event::EventEmitter;
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use starknet::storage::{
@@ -176,18 +178,21 @@ pub mod DestinatonContract {
             assert!(loan.active, "Loan is not active");
             assert!(loan.funded, "Loan is not funded");
 
-            let total_due = self.calculate_total_due(borrower); 
+            let total_due = self.calculate_total_due(borrower);
             assert!(amount <= total_due, "Repayment amount exceeds total due");
 
             let lending_token_address = self.lending_token.read();
             let lending_token = ILendingTokenDispatcher { contract_address: lending_token_address };
             lending_token.burn(borrower, amount);
 
-            self.loans.entry(borrower).write(Loan { repaid_amount: loan.repaid_amount + amount, ..loan });
+            self
+                .loans
+                .entry(borrower)
+                .write(Loan { repaid_amount: loan.repaid_amount + amount, ..loan });
             self.emit(LoanRepaid { borrower, amount });
 
             if loan.repaid_amount >= total_due {
-                self.loans.entry(borrower).write(Loan { active: false, ..loan });    
+                self.loans.entry(borrower).write(Loan { active: false, ..loan });
                 self.emit(LoanFullyRepaid { borrower });
 
                 let overpayment = loan.repaid_amount - total_due;
@@ -242,17 +247,29 @@ pub mod DestinatonContract {
             }
         }
 
-        fn get_loan_details(self: @ContractState, borrower: ContractAddress) -> (u256, u256, u256, u256, u256, bool, bool) {
+        fn get_loan_details(
+            self: @ContractState, borrower: ContractAddress,
+        ) -> (u256, u256, u256, u256, u256, bool, bool) {
             let loan = self.loans.entry(borrower).read();
-            return (loan.amount, loan.repaid_amount, loan.interest_rate, loan.due_date, loan.credit_score, loan.active, loan.funded);
+            return (
+                loan.amount,
+                loan.repaid_amount,
+                loan.interest_rate,
+                loan.due_date,
+                loan.credit_score,
+                loan.active,
+                loan.funded,
+            );
         }
 
         fn withdraw_tokens(ref self: ContractState, amount: u256) {
             self.ownable.assert_only_owner();
             let lending_token_address = self.lending_token.read();
             let lending_token = IERC20Dispatcher { contract_address: lending_token_address };
-            assert!(amount <= lending_token.balance_of(get_contract_address()), "Insufficient balance");
-            
+            assert!(
+                amount <= lending_token.balance_of(get_contract_address()), "Insufficient balance",
+            );
+
             let success = lending_token.transfer(self.ownable.owner(), amount);
             assert!(success, "Token transfer failed");
         }
