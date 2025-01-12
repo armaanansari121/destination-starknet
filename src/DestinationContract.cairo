@@ -1,9 +1,10 @@
-use starknet::ContractAddress;
+use starknet::{ContractAddress};
 
 #[starknet::interface]
 pub trait IDestinationContract<TContractState> {
     fn request_loan(
         ref self: TContractState,
+        borrower_eth: felt252,
         borrower: ContractAddress,
         amount: u256,
         interest_rate: u256,
@@ -47,6 +48,7 @@ pub mod DestinationContract {
 
     #[derive(Drop, starknet::Store)]
     struct Loan {
+        borrower_eth: felt252,
         amount: u256,
         repaid_amount: u256,
         interest_rate: u256,
@@ -83,18 +85,18 @@ pub mod DestinationContract {
 
     #[derive(Drop, starknet::Event)]
     struct LoanRepaid {
-        borrower: ContractAddress,
+        borrower_eth: felt252,
         amount: u256,
     }
 
     #[derive(Drop, starknet::Event)]
     struct LoanFullyRepaid {
-        borrower: ContractAddress,
+        borrower_eth: felt252,
     }
 
     #[derive(Drop, starknet::Event)]
     struct LoanLiquidated {
-        borrower: ContractAddress,
+        borrower_eth: felt252,
         amount: u256,
     }
 
@@ -124,6 +126,7 @@ pub mod DestinationContract {
     impl IDestinationContract of super::IDestinationContract<ContractState> {
         fn request_loan(
             ref self: ContractState,
+            borrower_eth: felt252,
             borrower: ContractAddress,
             amount: u256,
             interest_rate: u256,
@@ -134,6 +137,7 @@ pub mod DestinationContract {
 
             assert!(!loan.active, "Borrower has an active loan");
             let loan = Loan {
+                borrower_eth,
                 amount,
                 repaid_amount: 0,
                 interest_rate,
@@ -160,6 +164,7 @@ pub mod DestinationContract {
 
             lending_token.mint(borrower, loan.amount);
             self.emit(LoanFunded { borrower, amount: loan.amount });
+            self.reentrancy_guard.end();
         }
 
         fn get_loan_status(
@@ -189,17 +194,22 @@ pub mod DestinationContract {
                 .loans
                 .entry(borrower)
                 .write(Loan { repaid_amount: loan.repaid_amount + amount, ..loan });
-            self.emit(LoanRepaid { borrower, amount });
+            self.emit(LoanRepaid { borrower_eth: loan.borrower_eth, amount });
+
+            let loan  = self.loans.entry(borrower).read();
 
             if loan.repaid_amount >= total_due {
                 self.loans.entry(borrower).write(Loan { active: false, ..loan });
-                self.emit(LoanFullyRepaid { borrower });
+                self.emit(LoanFullyRepaid { borrower_eth: loan.borrower_eth });
+
+                let loan = self.loans.entry(borrower).read();
 
                 let overpayment = loan.repaid_amount - total_due;
                 if overpayment > 0 {
                     lending_token.mint(borrower, overpayment);
                 }
             }
+            self.reentrancy_guard.end();
         }
 
         fn liquidate_loan(ref self: ContractState, borrower: ContractAddress) {
@@ -216,7 +226,7 @@ pub mod DestinationContract {
 
             let liquidation_amount: u256 = total_due - loan.repaid_amount;
             self.loans.entry(borrower).write(Loan { active: false, ..loan });
-            self.emit(LoanLiquidated { borrower, amount: liquidation_amount });
+            self.emit(LoanLiquidated { borrower_eth: loan.borrower_eth, amount: liquidation_amount });
         }
 
         fn calculate_total_due(self: @ContractState, borrower: ContractAddress) -> u256 {
